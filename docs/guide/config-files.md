@@ -102,6 +102,7 @@ Create a `ccusage.json` file with your preferred defaults:
 		"json": false,
 		"mode": "auto",
 		"offline": false,
+		"noCost": false,
 		"timezone": "Asia/Tokyo",
 		"breakdown": true
 	}
@@ -130,14 +131,14 @@ You can also reference a local schema file after installing ccusage:
 
 ### Global Defaults
 
-The `defaults` section sets default values for all commands:
+The `defaults` section sets shared default values for unified reports and legacy Claude commands:
 
 ```json
 {
 	"$schema": "https://ccusage.com/config-schema.json",
 	"defaults": {
-		"since": "20250101",
-		"until": "20250630",
+		"since": "20260101",
+		"until": "20260531",
 		"json": false,
 		"mode": "auto",
 		"debug": false,
@@ -145,15 +146,17 @@ The `defaults` section sets default values for all commands:
 		"order": "asc",
 		"breakdown": false,
 		"offline": false,
-		"timezone": "UTC",
-		"jq": ".data[]"
+		"noCost": false,
+		"timezone": "UTC"
 	}
 }
 ```
 
+Set `noCost` to `true` to hide cost columns in tables and remove cost fields from JSON output by default.
+
 ### Command-Specific Configuration
 
-Override defaults for specific commands using the `commands` section:
+Override shared defaults for specific unified reports and legacy Claude commands using the `commands` section:
 
 ```json
 {
@@ -175,6 +178,127 @@ Override defaults for specific commands using the `commands` section:
 }
 ```
 
+### Source-Specific Configuration
+
+Use data source namespaces to set defaults and report overrides. Supported namespaces are `claude`, `codex`, `opencode`, `amp`, `droid`, `codebuff`, `hermes`, `pi`, `goose`, `openclaw`, `kilo`, `kimi`, `qwen`, `copilot`, `gemini`, `antigravity`, `grok`, and `zcode`.
+
+```json
+{
+	"$schema": "https://ccusage.com/config-schema.json",
+	"defaults": {
+		"json": false,
+		"timezone": "UTC"
+	},
+	"codex": {
+		"defaults": {
+			"json": true,
+			"offline": true
+		},
+		"commands": {
+			"daily": {
+				"since": "20260101",
+				"until": "20260131"
+			}
+		}
+	},
+	"opencode": {
+		"commands": {
+			"weekly": {
+				"timezone": "Europe/London"
+			}
+		}
+	},
+	"droid": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"codebuff": {
+		"commands": {
+			"daily": {
+				"json": true
+			}
+		}
+	},
+	"pi": {
+		"stores": [
+			{
+				"name": "omp",
+				"path": "~/.omp/agent/sessions"
+			}
+		],
+		"defaults": {
+			"piPath": "/path/to/pi/sessions,/archive/pi/sessions"
+		}
+	},
+	"openclaw": {
+		"defaults": {
+			"openClawPath": "/path/to/openclaw,/archive/openclaw"
+		}
+	},
+	"kilo": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"kimi": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"qwen": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"copilot": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"gemini": {
+		"defaults": {
+			"offline": true
+		}
+	},
+	"zcode": {
+		"defaults": {
+			"offline": true
+		}
+	}
+}
+```
+
+This configuration affects source-focused commands such as:
+
+```bash
+ccusage codex daily
+ccusage opencode weekly
+ccusage droid daily
+ccusage codebuff daily
+ccusage pi daily
+ccusage openclaw daily
+ccusage kilo daily
+ccusage kimi daily
+ccusage qwen daily
+ccusage copilot monthly
+ccusage gemini daily
+ccusage antigravity daily
+ccusage zcode daily
+```
+
+Source-specific settings are also applied when running unified reports such as `ccusage daily`. In that case, each source receives its own merged options before data is loaded.
+
+Use `pi.stores` for additional pi-format session stores, such as tools or forks that write sessions outside `~/.pi/agent/sessions`. Named stores are additive to the default `pi` agent in unified reports, use their own agent name in JSON and tables, and prefix models with `[name]` followed by a space. Store names must match `^[a-z][a-z0-9_-]{0,31}$`, must be unique, and cannot use a built-in agent name. Each store path can be one sessions directory or a comma-separated list; `~` is expanded for store paths, nonexistent paths are treated as empty, and resolved paths that overlap the default `pi` store or another named store — including one path nested inside another — are rejected. They do not create focused commands such as `ccusage omp daily`; `PI_AGENT_DIR`, `--pi-path`, and `pi.defaults.piPath` still affect only the default `pi` agent.
+
+For a namespaced command, options are applied in this order:
+
+1. `defaults`
+2. `commands.<report>`
+3. `<source>.defaults`
+4. `<source>.commands.<report>`
+5. Command-line arguments
+
 ## Command-Specific Options
 
 ### Daily Command
@@ -186,8 +310,8 @@ Override defaults for specific commands using the `commands` section:
 			"instances": true,
 			"project": "my-project",
 			"breakdown": true,
-			"since": "20250101",
-			"until": "20250630"
+			"since": "20260101",
+			"until": "20260531"
 		}
 	}
 }
@@ -259,7 +383,10 @@ Override defaults for specific commands using the `commands` section:
 		"statusline": {
 			"offline": true,
 			"cache": true,
-			"refreshInterval": 2
+			"refreshInterval": 2,
+			"modelLabelAliases": {
+				"arn:aws:bedrock:ap-northeast-1:012345678910:application-inference-profile/abcde12345": "claude-opus-4-6"
+			}
 		}
 	}
 }
@@ -276,6 +403,61 @@ ccusage daily --config ./my-config.json
 # Works with all commands
 ccusage blocks --config /path/to/team-config.json
 ```
+
+## Pricing Overrides
+
+ccusage looks up token costs from a LiteLLM pricing snapshot embedded in the binary, optionally refreshed at runtime (or skipped with `--offline`). When a model is missing from LiteLLM (private deployments, internal wrappers like Pi's `[pi] gpt-5.4`, custom proxies), or when the snapshot price differs from your contract, set `pricingOverrides` under `defaults` to supply per-model values.
+
+```json
+{
+	"$schema": "https://ccusage.com/config-schema.json",
+	"defaults": {
+		"pricingOverrides": {
+			"[pi] gpt-5.4": {
+				"inputCostPerToken": 0.0000025,
+				"outputCostPerToken": 0.000015,
+				"cacheReadInputTokenCost": 0.00000025
+			},
+			"my-private-claude": {
+				"inputCostPerToken": 0.000003,
+				"outputCostPerToken": 0.000015,
+				"maxInputTokens": 1000000
+			}
+		}
+	}
+}
+```
+
+### Raw Model Names
+
+Keys in `pricingOverrides` must match the **raw model name** as recorded in the source logs, including any adapter prefix:
+
+| Adapter                                | Prefix    | Example key                    |
+| -------------------------------------- | --------- | ------------------------------ |
+| Pi                                     | `[pi] `   | `[pi] gpt-5.4`                 |
+| Named Pi store                         | `[name] ` | `[omp] gpt-5.4`                |
+| Others (Claude, Codex, OpenCode, etc.) | none      | `claude-sonnet-4-5`, `gpt-5.5` |
+
+To find the exact name, run `ccusage <agent> daily --json` and look at the `model` field in the per-row breakdown.
+
+### Supported Fields
+
+All fields are optional. Unspecified fields fall back to the LiteLLM entry (when one exists) or `0.0`:
+
+- `inputCostPerToken`, `outputCostPerToken` — base per-token rates
+- `cacheCreationInputTokenCost`, `cacheReadInputTokenCost` — cache pricing
+- `inputCostPerTokenAbove200kTokens`, `outputCostPerTokenAbove200kTokens`, `cacheCreationInputTokenCostAbove200kTokens`, `cacheReadInputTokenCostAbove200kTokens` — tiered pricing past 200k tokens
+- `maxInputTokens` — context window limit (used by the Claude statusline hook)
+- `fastMultiplier` — multiplier applied when the message is recorded as fast-mode
+
+### Overrides vs Offline Mode
+
+`--offline` and `pricingOverrides` are independent:
+
+- `--offline` controls the **data source** — skip the network refresh and use the embedded LiteLLM snapshot only.
+- `pricingOverrides` controls **specific entries** — patch in or replace prices for individual models.
+
+Overrides apply in both online and offline modes.
 
 This is useful for:
 

@@ -41,9 +41,9 @@ ccusage daily
 ┌──────────────┬─────────────┬────────┬─────────┬────────────┐
 │ Date         │ Models      │ Input  │ Output  │ Cost (USD) │
 ├──────────────┼─────────────┼────────┼─────────┼────────────┤
-│ 2025-01-15   │ • opus-4    │  1,245 │  28,756 │    $12.45  │ ← Pre-calculated
-│ 2024-12-20   │ • sonnet-4  │    856 │  19,234 │     $8.67  │ ← Calculated
-│ 2024-11-10   │ • opus-4    │    634 │  15,678 │     $7.23  │ ← Calculated
+│ 2026-05-16   │ • opus-4-1    │  1,245 │  28,756 │    $12.45  │ ← Pre-calculated
+│ 2026-05-15   │ • sonnet-4-5  │    856 │  19,234 │     $8.67  │ ← Calculated
+│ 2026-05-14   │ • opus-4-1    │    634 │  15,678 │     $7.23  │ ← Calculated
 └──────────────┴─────────────┴────────┴─────────┴────────────┘
 ```
 
@@ -60,7 +60,7 @@ ccusage monthly --mode calculate --breakdown
 
 1. **Ignores `costUSD` values** from Claude Code data
 2. **Uses token counts** (input, output, cache) for all entries
-3. **Applies current model pricing** from LiteLLM database
+3. **Applies model pricing** from LiteLLM, models.dev, and built-in historical schedules using each event's timestamp
 4. **Consistent methodology** across all time periods
 
 #### Best for:
@@ -76,9 +76,9 @@ ccusage monthly --mode calculate --breakdown
 ┌──────────────┬─────────────┬────────┬─────────┬────────────┐
 │ Date         │ Models      │ Input  │ Output  │ Cost (USD) │
 ├──────────────┼─────────────┼────────┼─────────┼────────────┤
-│ 2025-01-15   │ • opus-4    │  1,245 │  28,756 │    $12.38  │ ← Calculated
-│ 2024-12-20   │ • sonnet-4  │    856 │  19,234 │     $8.67  │ ← Calculated
-│ 2024-11-10   │ • opus-4    │    634 │  15,678 │     $7.23  │ ← Calculated
+│ 2026-05-16   │ • opus-4-1    │  1,245 │  28,756 │    $12.38  │ ← Calculated
+│ 2026-05-15   │ • sonnet-4-5  │    856 │  19,234 │     $8.67  │ ← Calculated
+│ 2026-05-14   │ • opus-4-1    │    634 │  15,678 │     $7.23  │ ← Calculated
 └──────────────┴─────────────┴────────┴─────────┴────────────┘
 ```
 
@@ -111,9 +111,9 @@ ccusage session --mode display --json
 ┌──────────────┬─────────────┬────────┬─────────┬────────────┐
 │ Date         │ Models      │ Input  │ Output  │ Cost (USD) │
 ├──────────────┼─────────────┼────────┼─────────┼────────────┤
-│ 2025-01-15   │ • opus-4    │  1,245 │  28,756 │    $12.45  │ ← Pre-calculated
-│ 2024-12-20   │ • sonnet-4  │    856 │  19,234 │     $0.00  │ ← No cost data
-│ 2024-11-10   │ • opus-4    │    634 │  15,678 │     $0.00  │ ← No cost data
+│ 2026-05-16   │ • opus-4-1    │  1,245 │  28,756 │    $12.45  │ ← Pre-calculated
+│ 2026-05-15   │ • sonnet-4-5  │    856 │  19,234 │     $0.00  │ ← No cost data
+│ 2026-05-14   │ • opus-4-1    │    634 │  15,678 │     $0.00  │ ← No cost data
 └──────────────┴─────────────┴────────┴─────────┴────────────┘
 ```
 
@@ -125,11 +125,11 @@ You have data from different time periods with varying cost information:
 
 ```bash
 # Auto mode handles mixed data intelligently
-ccusage daily --mode auto --since 20241201
+ccusage daily --mode auto --since 20260501
 
 # Shows:
-# - Pre-calculated costs for recent entries (Jan 2025)
-# - Calculated costs for older entries (Dec 2024)
+# - Pre-calculated costs where the source provides them
+# - Calculated costs where only token counts are available
 ```
 
 ### Scenario 2: Consistent Cost Comparison
@@ -150,7 +150,7 @@ You want to verify Claude's official cost calculations:
 
 ```bash
 # Display mode shows only official Claude costs
-ccusage daily --mode display --since 20250101
+ccusage daily --mode display --since 20260101
 
 # Compare with your Claude billing dashboard
 # Entries without costs show $0.00
@@ -162,7 +162,7 @@ Analyzing usage patterns over time:
 
 ```bash
 # Auto mode for complete picture
-ccusage daily --mode auto --since 20240101 --until 20241231
+ccusage daily --mode auto --since 20260501 --until 20260516
 
 # Calculate mode for consistent comparison
 ccusage monthly --mode calculate --order asc
@@ -176,9 +176,10 @@ When calculating costs from tokens, ccusage uses:
 
 #### Model Pricing Sources
 
-- **LiteLLM database** - Up-to-date model pricing
+- **LiteLLM database and models.dev catalog** - Up-to-date model pricing and model metadata
 - **Automatic updates** - Pricing refreshed regularly
-- **Multiple models** - Supports Claude Opus, Sonnet, and other models
+- **Historical schedules** - Time-varying model rates use each event's recorded timestamp
+- **Multiple models** - Supports Claude Opus 4.1, Sonnet 4.5, and other models
 
 #### Token Types
 
@@ -186,7 +187,8 @@ When calculating costs from tokens, ccusage uses:
 type TokenCosts = {
 	input: number; // Input tokens
 	output: number; // Output tokens
-	cacheCreate: number; // Cache creation tokens
+	cacheCreate5m: number; // 5-minute cache creation tokens
+	cacheCreate1h: number; // 1-hour cache creation tokens
 	cacheRead: number; // Cache read tokens
 };
 ```
@@ -197,9 +199,14 @@ type TokenCosts = {
 totalCost =
 	inputTokens * inputPrice +
 	outputTokens * outputPrice +
-	cacheCreateTokens * cacheCreatePrice +
+	cacheCreate5mTokens * cacheCreatePrice +
+	cacheCreate1hTokens * inputPrice * 2 +
 	cacheReadTokens * cacheReadPrice;
 ```
+
+When Claude Code records do not include the `cache_creation` duration
+breakdown, ccusage falls back to pricing `cache_creation_input_tokens` at the
+standard cache creation rate.
 
 ### Pre-calculated Costs
 
@@ -207,8 +214,8 @@ Claude Code provides `costUSD` values in JSONL files:
 
 ```json
 {
-	"timestamp": "2025-01-15T10:30:00Z",
-	"model": "claude-opus-4-20250514",
+	"timestamp": "2026-05-16T10:30:00Z",
+	"model": "claude-opus-4-1-20250805",
 	"usage": {
 		"input_tokens": 1245,
 		"output_tokens": 28756,
@@ -274,7 +281,7 @@ ccusage daily --mode calculate --breakdown
 ccusage session --mode display --json | jq '.[] | select(.totalCost > 0)'
 
 # Auto mode with date filtering
-ccusage monthly --mode auto --since 20240101 --order asc
+ccusage monthly --mode auto --since 20260101 --order asc
 ```
 
 ### Performance Considerations
@@ -313,7 +320,7 @@ ccusage daily --mode calculate
 
 ```bash
 # Use calculate mode for consistency
-ccusage daily --mode calculate --since 20240101
+ccusage daily --mode calculate --since 20260501
 ```
 
 ### Issue: Large discrepancies in debug mode
@@ -344,5 +351,5 @@ ccusage daily --mode calculate
 After understanding cost modes:
 
 - Explore [Configuration](/guide/configuration) for environment setup
-- Learn about [Custom Paths](/guide/custom-paths) for multiple data sources
-- Try [Live Monitoring](/guide/live-monitoring) with different cost modes
+- Learn about [Claude Code](/guide/claude/) data paths for custom Claude Code directories
+- Set per-model prices via [Pricing Overrides](/guide/config-files#pricing-overrides) for private or proxied models

@@ -10,7 +10,7 @@ The `statusline` command provides a compact, real-time view of your Claude Code 
 - 💰 **Today's total cost** - Your cumulative spending for the current day
 - 🚀 **Current session block** - Cost and time remaining in your active 5-hour billing block
 - 🔥 **Burn rate** - Token consumption rate with visual indicators
-- 🤖 **Active model** - The Claude model you're currently using
+- 🤖 **Active model** - The Claude model you're currently using, with its reasoning effort level when available
 
 ## Setup
 
@@ -108,19 +108,25 @@ See [Cost Source Options](#cost-source-options) section for all available modes.
 
 The statusline displays a compact, single-line summary:
 
-```
-🤖 Opus | 💰 $0.23 session / $1.23 today / $0.45 block (2h 45m left) | 🔥 $0.12/hr | 🧠 25,000 (12%)
+```text
+🤖 Fable 5 (high) | 💰 $0.23 session / $1.23 today / $0.45 block (2h 45m left) | 🔥 $0.12/hr | 🧠 25,000 (12%)
 ```
 
 When using `--cost-source both`, the session cost shows both Claude Code and ccusage calculations:
 
+```text
+🤖 Fable 5 (high) | 💰 ($0.25 cc / $0.23 ccusage) session / $1.23 today / $0.45 block (2h 45m left) | 🔥 $0.12/hr | 🧠 25,000 (12%)
 ```
-🤖 Opus | 💰 ($0.25 cc / $0.23 ccusage) session / $1.23 today / $0.45 block (2h 45m left) | 🔥 $0.12/hr | 🧠 25,000 (12%)
+
+The reasoning effort level next to the model name comes from Claude Code (2.1.119+). All current Claude models report it; for older Claude Code versions or models without the effort parameter, the statusline shows just the model name:
+
+```text
+🤖 Opus 4.1 | 💰 $0.23 session / $1.23 today / $0.45 block (2h 45m left) | 🔥 $0.12/hr | 🧠 25,000 (12%)
 ```
 
 ### Components Explained
 
-- **Model** (`🤖 Opus`): Currently active Claude model
+- **Model** (`🤖 Fable 5 (high)`): Currently active Claude model, followed by the reasoning effort level in parentheses (`low`, `medium`, `high`, `xhigh`, or `max`) when Claude Code provides it
 - **Session Cost** (`💰 $0.23 session`): Cost for the current conversation session (see [Cost Source Options](#cost-source-options) for different calculation modes)
 - **Today's Cost** (`$1.23 today`): Total cost for the current day across all sessions
 - **Session Block** (`$0.45 block (2h 45m left)`): Current 5-hour block cost with remaining time
@@ -137,8 +143,8 @@ When using `--cost-source both`, the session cost shows both Claude Code and ccu
 
 When no active block exists:
 
-```
-🤖 Opus | 💰 $0.00 session / $0.00 today / No active block
+```text
+🤖 Fable 5 (high) | 💰 $0.00 session / $0.00 today / No active block
 ```
 
 ## Technical Details
@@ -288,6 +294,45 @@ bun x ccusage statusline --visual-burn-rate emoji
 - 🟢 Normal (Green)
 - ⚠️ Moderate (Yellow)
 - 🚨 High (Red)
+
+### Model Label Aliases
+
+Some setups report very long model identifiers. For example, AWS Bedrock
+inference profiles surface full ARNs such as
+`arn:aws:bedrock:ap-northeast-1:012345678910:application-inference-profile/abcde12345`,
+which gets truncated in the statusline and hides which model is in use.
+
+Use `modelLabelAliases` in your configuration file to map a model identifier to
+a short display label. When the active model matches a key, the statusline shows
+the alias instead:
+
+```json
+{
+	"commands": {
+		"statusline": {
+			"modelLabelAliases": {
+				"arn:aws:bedrock:ap-northeast-1:012345678910:application-inference-profile/abcde12345": "claude-opus-4-6"
+			}
+		}
+	}
+}
+```
+
+With the alias above, the statusline changes from:
+
+```text
+🤖 arn:aws:bedrock:ap-northeast-1:012345678910:application-inference-profile/abcde12345 | 💰 ...
+```
+
+to:
+
+```text
+🤖 claude-opus-4-6 | 💰 ...
+```
+
+Keys are matched exactly against the model's display name. Models without a
+matching alias are shown unchanged. See the [Configuration Guide](/guide/configuration)
+for more details.
 
 ## Troubleshooting
 

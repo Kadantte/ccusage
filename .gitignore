@@ -4,7 +4,11 @@ node_modules
 # output
 out
 dist
+target/
+result
+result-*
 *.tgz
+packages/ccusage-*/bin/
 
 # code coverage
 coverage
@@ -21,6 +25,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.test.local
 .env.production.local
 .env.local
+.npmrc
 
 # caches
 .eslintcache
@@ -38,3 +43,8 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # nix
 .direnv
 !.envrc
+.pre-commit-config.yaml
+.npmrc
+
+# generated local agent skills
+.claude/skills

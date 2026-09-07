@@ -12,14 +12,39 @@ Filter usage data by date range:
 
 ```bash
 # Filter by date range
-ccusage daily --since 20250101 --until 20250630
+ccusage daily --since 20260101 --until 20260531
 
 # Show data from a specific date
-ccusage monthly --since 20250101
+ccusage monthly --since 20260101
 
 # Show data up to a specific date
-ccusage session --until 20250630
+ccusage session --until 20260531
 ```
+
+Both bounds accept `YYYY-MM-DD` or `YYYYMMDD` and are inclusive. Any other spelling, or a value that is not a real calendar date such as `2026-02-30`, is rejected with a non-zero exit code instead of silently changing which rows the report keeps. The same check applies to `since` and `until` in a [configuration file](/guide/config-files).
+
+### Recent Periods
+
+Instead of working out dates, ask for the most recent periods of whatever the report groups by:
+
+```bash
+# Today
+ccusage daily --last 1
+
+# This week
+ccusage weekly --last 1
+
+# This month
+ccusage monthly --last 1
+
+# The last seven days, and the last three months
+ccusage daily --last 7
+ccusage monthly --last 3
+```
+
+The count is inclusive of the current period, so `--last 2` on a daily report covers yesterday and today. Weeks start on the same day the report buckets by, which is Monday everywhere except `ccusage claude weekly`, where `--start-of-week` decides.
+
+`--last` works on every daily, weekly, and monthly report, including the per-agent ones such as `ccusage codex daily --last 1`. It is not available on `session`, `blocks`, or `statusline`, which have no calendar period, and it cannot be combined with `--since`, `--until`, or `--sections`.
 
 ### Output Format
 
@@ -34,9 +59,15 @@ ccusage daily -j
 ccusage daily --breakdown
 ccusage daily -b
 
+# Hide cost columns and JSON cost fields
+ccusage daily --no-cost
+ccusage daily --json --no-cost
+
 # Combine options
 ccusage daily --json --breakdown
 ```
+
+`--no-cost` removes cost columns from table output and removes cost fields such as `totalCost`, `costUSD`, and `cost` from JSON output.
 
 ### Cost Calculation Mode
 
@@ -123,6 +154,20 @@ ccusage monthly --config /path/to/team-config.json
 
 ## Command-Specific Options
 
+### Unified Report Options
+
+These options apply to `ccusage daily`, `ccusage weekly`, `ccusage monthly`, and `ccusage session` when they are aggregating all detected sources:
+
+```bash
+# Emit several JSON report sections from one source load
+ccusage daily --sections daily,monthly,session --json
+
+# Add per-agent breakdowns to daily, weekly, and monthly JSON rows
+ccusage daily --by-agent --json
+```
+
+`--sections` accepts a comma-separated list of `daily`, `weekly`, `monthly`, and `session`. The invoked report section is always included. For table output, each requested section is printed as a separate table. `--by-agent` is JSON-only; session rows are already per-agent.
+
 ### Daily Command
 
 Additional options for daily reports:
@@ -205,19 +250,20 @@ ccusage statusline --cache
 ccusage statusline --refresh-interval 5
 ```
 
-## JSON Output Options
-
-When using `--json` output, additional processing options are available:
+## JSON Output
 
 ```bash
-# Apply jq filter to JSON output
-ccusage daily --json --jq ".data[]"
+# Print JSON output
+ccusage daily --json
 
-# Filter high-cost days
-ccusage daily --json --jq ".data[] | select(.cost > 10)"
+# Print JSON without cost fields
+ccusage daily --json --no-cost
+
+# Pipe JSON output to jq
+ccusage daily --json | jq ".data[]"
 
 # Extract specific fields
-ccusage session --json --jq ".data[] | {date, cost}"
+ccusage session --json | jq ".data[] | {date, cost}"
 ```
 
 ## Option Precedence
@@ -240,7 +286,7 @@ Options are applied in this order (highest to lowest priority):
 ccusage daily --instances --breakdown
 
 # Check specific project costs
-ccusage daily --project myapp --since 20250101
+ccusage daily --project myapp --since 20260101
 
 # Export for reporting
 ccusage monthly --json > monthly-report.json
@@ -256,7 +302,7 @@ ccusage daily --config ./team-config.json
 ccusage daily --timezone UTC
 
 # Generate shareable report
-ccusage weekly --json --jq ".summary"
+ccusage weekly --json
 ```
 
 ### Cost Monitoring
